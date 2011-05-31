@@ -1,0 +1,5 @@
+name = "CiviCRM Advanced Mail"
+description = "adds additional options to CiviMail"
+core = 6.x
+package = CiviCRM
+dependencies[] = civicrm

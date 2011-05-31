@@ -1,0 +1,142 @@
+<?php
+
+function civicrm_adv_mail_civicrm_buildForm ($formName, &$form) {
+  if($formName == 'CRM_Mailing_Form_Group') {
+    $defaults = array();
+
+    //remove the existing base group if it exists
+    if($form->elementExists("baseGroup")) {
+        $form->removeElement("baseGroup");
+    }
+
+    //Create the form element for unsubscribe group
+    $config = CRM_Core_Config::singleton();
+    $mailingGroups = CRM_Core_PseudoConstant::group('Mailing');
+    $bEle =& $form->addElement( 'advmultiselect', 'baseGroups',
+                ts( 'Unsubscription Group(s)' ), 
+                $mailingGroups,
+                array('size' => 5,
+                      'style' => 'width:240px',
+                      'class' => 'advmultiselect')
+                );
+    $bEle->setButtonAttributes('add'   , array('value' => ts('Add >>'   )));
+    $bEle->setButtonAttributes ('remove', array('value' => ts('<< Remove')));
+    $form->addRule( 'baseGroups', ts('Please select a group to use for unsubscriptions'), 'required' );
+
+    $mailing_id = $form->get('mailing_id');
+    if($mailing_id) {
+        require_once 'CRM/Mailing/DAO/Group.php';
+        $dao = new CRM_Mailing_DAO_Group();
+        
+        $mailingGroups = array();
+        $dao->mailing_id = $mailing_id;
+        $dao->find();
+        while ( $dao->fetch() ) {
+            $mailingGroups[$dao->entity_table][$dao->group_type][] = $dao->entity_id;
+        }
+        $defaults['baseGroups'] = $mailingGroups['civicrm_group']['Base'];
+
+        //Hidden form element to hold the ids of hidden smart groups
+        $hiddenGroups = _civicrm_adv_mail_get_hidden_groups($mailing_id);
+        if(count($hiddenGroups) > 0) {
+          $form->add('text', 'hiddenGroups');
+          $defaults['hiddenGroups'] = implode(',', $hiddenGroups);
+        }
+    }
+    $buttons = array( array ( 'type'      => 'next',
+                                  'name'      => ts('Next >>'),
+                                  'spacing' => '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;',
+                                  'isDefault' => true   ),
+                          array ( 'type'      => 'submit',
+                                  'name'      => ts('Save & Continue Later') ),
+                          array ( 'type'      => 'cancel',
+                                  'name'      => ts('Cancel') ),
+                          );
+    $form->addButtons( $buttons );
+
+
+    //Create Hidden form element with the ids of non-mailing lists
+    $allGroups = CRM_Core_PseudoConstant::group();
+    $nonMailingGroups = array_diff($allGroups, $mailingGroups);
+    $form->add('hidden', 'nonMailing');
+    $defaults['nonMailing'] = implode(',', array_keys($nonMailingGroups));
+
+    $form->setDefaults($defaults);
+  }
+}
+
+function civicrm_adv_mail_civicrm_mailingGroups(&$form, &$groups, &$mailings ) {
+  //Include all groups in the mailing list
+  $config = CRM_Core_Config::singleton();
+  $groups = CRM_Core_PseudoConstant::group();
+}
+
+function civicrm_adv_mail_civicrm_postProcess($formName, &$form) {
+  if($formName == 'CRM_Mailing_Form_Group') {
+    dpm($form, "Post Process Form");
+    $config = CRM_Core_Config::singleton();
+    $groups = array('include'=>array(), 'exclude'=>array(), 'base'=>array());
+    if (is_array($form->_submitValues['baseGroups'])) {
+      $mg = new CRM_Mailing_DAO_Group();
+      foreach($form->_submitValues['baseGroups'] as $key => $id) {
+        if ($id) {
+          $mg->reset( );
+          $mg->mailing_id = $form->get('mailing_id');                        
+          $mg->entity_table = CRM_Contact_BAO_Group::getTableName( );
+          $mg->entity_id  = $id;
+          $mg->group_type = 'Base';
+          $mg->save( );
+        }
+      }
+    }
+    if($form->_submitValues['hiddenGroups']) {
+      $mg = new CRM_Mailing_DAO_Group();
+      foreach(explode(',', $form->_submitValues['hiddenGroups']) as $id) {
+        if($id) {
+          $mg->reset();
+          $mg->mailing_id = $form->get('mailing_id');
+          $mg->entity_table = CRM_Contact_BAO_Group::getTableName( );
+          $mg->entity_id = $id;
+          $mg->group_type = 'Include';
+          $mg->save();
+        }
+      }
+    }
+    CRM_Mailing_BAO_Mailing::getRecipients( $form->get('mailing_id'), $form->get('mailing_id'),
+                                            null, null,
+                                            true );
+    require_once 'CRM/Mailing/BAO/Recipients.php';
+    $count = CRM_Mailing_BAO_Recipients::mailingSize( $form->get('mailing_id') );
+    $form->set   ('count'   , $count   );
+    $form->assign('count'   , $count   );
+  }
+}
+
+function _civicrm_adv_mail_get_hidden_groups($mailing_id) {
+  $mg    = CRM_Mailing_DAO_Group::getTableName( );
+  $group = CRM_Contact_DAO_Group::getTableName( );
+  
+  $query = "
+SELECT  $group.id as group_id
+  FROM  $group, $mg
+ WHERE  $mg.mailing_id = %1
+   AND  $mg.entity_id = $group.id
+   AND  $mg.group_type = 'Include'
+   AND  $group.is_hidden = 1"; 
+        
+  $params = array( 1 => array( $mailing_id, 'Integer' ) );
+  $searchDAO = CRM_Core_DAO::executeQuery( $query, $params );
+  $groupIds = array( );
+  while ( $searchDAO->fetch( ) ) {
+      $groupIds[] = $searchDAO->group_id;
+  }
+  return $groupIds;
+}
+
+function civicrm_adv_mail_civicrm_links($op, $objectName, $objectId, &$links, &$mask) {
+  //allow the users to 'continue' unscheduled mailings
+  //this is really bad.  Should not be running a query on each hook.....
+  if($op == 'view.mailing.browse.unscheduled') {
+    $mask |= CRM_Core_Action::PREVIEW;
+  }
+}
