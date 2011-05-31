@@ -1,4 +1,4 @@
-= CiviCRM Advanced Mail =
+# CiviCRM Advanced Mail #
 
 This is a drupal6 module which tweaks the way CiviMail handles unsubscriptions.  The main change is a seperation of which groups to send mail to and which groups to include in the mailing.  This is accomplished by requiring the user to select at least one "Unsubscription Group" from which contact unsubscription data will be used.
 
@@ -10,7 +10,7 @@ This is a drupal6 module which tweaks the way CiviMail handles unsubscriptions. 
  * When a contact unsubscribes from a mailing, they will be removed from *all* of the unsubscription groups.
    * If a user is not currently a member of one of the unsubscription groups, they will be added to the group with status "Removed"
 
-== Example Use Case ==
+## Example Use Case ##
 
 The conceptual use case is that the CiviCRM Mailing Groups will be mailing topics or mailing lists.  Therefore a CiviCRM user can send an email to selection of normal groups without allowing the contacts to unsubscribe from those normal groups.  Instead, the unsubscription is tracked else where.
 
@@ -28,7 +28,7 @@ With this module, both these issues are addressed, and the workflow becomes:
  * Create a new mailing, select "*Fundraising Newsletter*" as unsubscrition group, select "*VIP Doners*" as an included group
  * Email will go to all VIP doners, except those who have previously unsubscribed from the Fundraising newsletter.
 
-== Installation ==
+## Installation ##
 
 This module requires CiviCRM 3.4.2 and Drupal 6.  Install the module as any drupal module would be install.  Then, copy or symlink "Group.tpl" to [Your CiviCRM Custom Template Directory](http://wiki.civicrm.org/confuence/display/CRMDOC40/Directories)/CRM/Mailing/Form/Group.tpl
  
