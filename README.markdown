@@ -33,6 +33,7 @@ With this module, both these issues are addressed, and the workflow becomes:
 This module requires CiviCRM 3.4.2 and Drupal 6.  Install the module as any drupal module would be install.  Then, copy or symlink "Group.tpl" to [Your CiviCRM Custom Template Directory](http://wiki.civicrm.org/confuence/display/CRMDOC40/Directories)/CRM/Mailing/Form/Group.tpl
  
 For CiviCRM 3.4.0 and 3.4.1, you can apply the following patches and the module _should_ work:
+
  * [CRM-8207](http://issues.civicrm.org/jira/browse/CRM-8207)
  * [CRM-8190](http://issues.civicrm.org/jira/browse/CRM-8207)
  * [CRM-8171](http://issues.civicrm.org/jira/browse/CRM-8207)
