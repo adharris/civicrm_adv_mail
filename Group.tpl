@@ -116,7 +116,12 @@ cj(function() {
             });
          }
       }
-        
+
+      $searchResults = cj("#includeGroups-t option:contains('Search Results')");
+      if(arguments[0] == 'includeGroups' && arguments[4]=='remove' && $searchResults.is(":selected"))
+      {
+        $searchResults.removeAttr("selected");
+      }
        
       moveFunction.apply(QFAMS, arguments);
    }

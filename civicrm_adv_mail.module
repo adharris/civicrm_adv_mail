@@ -1,7 +1,25 @@
 <?php
 
 function civicrm_adv_mail_civicrm_buildForm ($formName, &$form) {
-  if($formName == 'CRM_Mailing_Form_Group') {
+  if($formName == 'CRM_Mailing_Form_Settings' || 
+     $formName == 'CRM_Mailing_Form_Upload' ||
+     $formName == 'CRM_Mailing_Form_Test') {
+    
+     if($form->_searchBasedMailing) {
+       $buttons = array( array ( 'type'      => 'back',
+                                  'name'      => ts('<< Previous') ),
+                          array ( 'type'      => 'next',
+                                  'name'      => ts('Next >>'),
+                                  'spacing' => '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;',
+                                  'isDefault' => true   ),
+                          array ( 'type'      => 'submit',
+                                  'name'      => ts('Save & Continue Later') ),
+                          array ( 'type'      => 'cancel',
+                                  'name'      => ts('Cancel') ),
+                          );
+       $form->addButtons($buttons);
+     }
+  } elseif($formName == 'CRM_Mailing_Form_Group') {
     $defaults = array();
 
     //remove the existing base group if it exists
@@ -23,26 +41,39 @@ function civicrm_adv_mail_civicrm_buildForm ($formName, &$form) {
     $bEle->setButtonAttributes ('remove', array('value' => ts('<< Remove')));
     $form->addRule( 'baseGroups', ts('Please select a group to use for unsubscriptions'), 'required' );
 
-    $mailing_id = $form->get('mailing_id');
+    //If there is a mailing id in the form, that means this mailing has already
+    //been saved, so we should load all the unsubscription groups.
+    $mailing_id = $form->get('mailing_id') ? $form->get('mailing_id') : CRM_Utils_Request::retrieve('mid', 'Integer', $this, false, null );
     if($mailing_id) {
-        require_once 'CRM/Mailing/DAO/Group.php';
-        $dao = new CRM_Mailing_DAO_Group();
-        
-        $mailingGroups = array();
-        $dao->mailing_id = $mailing_id;
-        $dao->find();
-        while ( $dao->fetch() ) {
-            $mailingGroups[$dao->entity_table][$dao->group_type][] = $dao->entity_id;
+      require_once 'CRM/Mailing/DAO/Group.php';
+      $dao = new CRM_Mailing_DAO_Group();
+      
+      $mailingGroups = array();
+      $dao->mailing_id = $mailing_id;
+      $dao->find();
+      while ( $dao->fetch() ) {
+          $mailingGroups[$dao->entity_table][$dao->group_type][] = $dao->entity_id;
+      }
+      $defaults['baseGroups'] = $mailingGroups['civicrm_group']['Base'];
+   
+      //Hidden form element to hold the ids of hidden smart groups
+      $hiddenGroups = _civicrm_adv_mail_get_hidden_groups($mailing_id);
+      if(count($hiddenGroups) > 0) {
+        foreach( $hiddenGroups as $id) {
+          $include =& $form->getElement('includeGroups');
+          $include->_options[] = array('text' => 'Search Results', 'attr' => array('value' => $id));  
         }
-        $defaults['baseGroups'] = $mailingGroups['civicrm_group']['Base'];
-
-        //Hidden form element to hold the ids of hidden smart groups
-        $hiddenGroups = _civicrm_adv_mail_get_hidden_groups($mailing_id);
-        if(count($hiddenGroups) > 0) {
-          $form->add('text', 'hiddenGroups');
-          $defaults['hiddenGroups'] = implode(',', $hiddenGroups);
-        }
+      }
     }
+
+    //if this is a search baase mailing, but we dont yet have a stored query
+    if( ! $mailing_id && $form->_searchBasedMailing) {
+      $include =& $form->getElement('includeGroups');
+      $include->_options[] = array('text' => 'Search Results', 'attr' => array('value' => '0'));  
+      $defaults['includeGroups'] = array(0);
+    }
+
+    //Explicitly add the save and continue later button.
     $buttons = array( array ( 'type'      => 'next',
                                   'name'      => ts('Next >>'),
                                   'spacing' => '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;',
@@ -54,8 +85,9 @@ function civicrm_adv_mail_civicrm_buildForm ($formName, &$form) {
                           );
     $form->addButtons( $buttons );
 
-
-    //Create Hidden form element with the ids of non-mailing lists
+    
+    //Create Hidden form element with the ids of non-mailing lists.  This is
+    //used to make the javascript rules enforceable.
     $allGroups = CRM_Core_PseudoConstant::group();
     $nonMailingGroups = array_diff($allGroups, $mailingGroups);
     $form->add('hidden', 'nonMailing');
@@ -73,7 +105,6 @@ function civicrm_adv_mail_civicrm_mailingGroups(&$form, &$groups, &$mailings ) {
 
 function civicrm_adv_mail_civicrm_postProcess($formName, &$form) {
   if($formName == 'CRM_Mailing_Form_Group') {
-    dpm($form, "Post Process Form");
     $config = CRM_Core_Config::singleton();
     $groups = array('include'=>array(), 'exclude'=>array(), 'base'=>array());
     if (is_array($form->_submitValues['baseGroups'])) {
@@ -89,19 +120,21 @@ function civicrm_adv_mail_civicrm_postProcess($formName, &$form) {
         }
       }
     }
-    if($form->_submitValues['hiddenGroups']) {
-      $mg = new CRM_Mailing_DAO_Group();
-      foreach(explode(',', $form->_submitValues['hiddenGroups']) as $id) {
-        if($id) {
-          $mg->reset();
-          $mg->mailing_id = $form->get('mailing_id');
-          $mg->entity_table = CRM_Contact_BAO_Group::getTableName( );
-          $mg->entity_id = $id;
-          $mg->group_type = 'Include';
-          $mg->save();
-        }
-      }
+    require_once 'CRM/Contact/DAO/Group.php';
+    
+    //when comming from a search based mailing, the core postProces will create
+    //a basegroup with id 0.  Ideally, the core post process would only create
+    //the base group if it exists in the form, but to keep it all in the module
+    //we explicitly delete the base group with id 0.
+    $mg = new CRM_Mailing_DAO_Group();
+    $mg->mailing_id     = $form->get('mailing_id');                         
+    $mg->entity_table   = CRM_Contact_BAO_Group::getTableName( );
+    $mg->entity_id      = 0;
+    $mg->find();
+    while ( $mg->fetch() ) {
+      $mg->delete( );
     }
+
     CRM_Mailing_BAO_Mailing::getRecipients( $form->get('mailing_id'), $form->get('mailing_id'),
                                             null, null,
                                             true );
@@ -138,5 +171,9 @@ function civicrm_adv_mail_civicrm_links($op, $objectName, $objectId, &$links, &$
   //this is really bad.  Should not be running a query on each hook.....
   if($op == 'view.mailing.browse.unscheduled') {
     $mask |= CRM_Core_Action::PREVIEW;
+  } else if($op == 'view.mailing.browse.scheduled') {
+    if(count(_civicrm_adv_mail_get_hidden_groups($objectId)) == 0) {
+      $mask |= CRM_Core_Action::UPDATE; 
+    }
   }
 }
