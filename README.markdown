@@ -35,7 +35,7 @@ This module requires CiviCRM 3.4.2 and Drupal 6.  Install the module as any drup
 For CiviCRM 3.4.0 and 3.4.1, you can apply the following patches and the module _should_ work:
 
  * [CRM-8207](http://issues.civicrm.org/jira/browse/CRM-8207)
- * [CRM-8190](http://issues.civicrm.org/jira/browse/CRM-8207)
- * [CRM-8171](http://issues.civicrm.org/jira/browse/CRM-8207)
- * [CRM-8142](http://issues.civicrm.org/jira/browse/CRM-8207)
- * [CRM-8114](http://issues.civicrm.org/jira/browse/CRM-8207)
+ * [CRM-8190](http://issues.civicrm.org/jira/browse/CRM-8190)
+ * [CRM-8171](http://issues.civicrm.org/jira/browse/CRM-8171)
+ * [CRM-8142](http://issues.civicrm.org/jira/browse/CRM-8142)
+ * [CRM-8114](http://issues.civicrm.org/jira/browse/CRM-8114)
