@@ -177,3 +177,9 @@ function civicrm_adv_mail_civicrm_links($op, $objectName, $objectId, &$links, &$
     }
   }
 }
+
+function civicrm_adv_mail_civicrm_unsubscribeGroups($op, $mailingId, $contactId, &$groups, &$baseGroups) {
+  $config = CRM_Core_Config::singleton();
+  $mailingGroups = CRM_Core_PseudoConstant::group("Mailing");
+  $groups = array_intersect($groups, array_keys($mailingGroups));
+}
